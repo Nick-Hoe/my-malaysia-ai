@@ -135,7 +135,7 @@ export default function Home() {
                 <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-800 flex flex-wrap gap-2.5">
                   <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={burnSlogan} onChange={(e) => setBurnSlogan(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" /><span className="text-xs text-zinc-300 font-medium">Big Slogan Banner</span></label>
                   {platform !== "youtube" && (
-Use code with caution.
+
 <><input type="checkbox" checked={stickerReady} onChange={(e) => setStickerReady(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🇲🇾 Ready Stock<input type="checkbox" checked={stickerFast} onChange={(e) => setStickerFast(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🚚 24H Fast Ship</>
 )}
 {platform === "youtube" && (<input type="checkbox" checked={stickerShock} onChange={(e) => setStickerShock(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />😱 Shock Face)}
