@@ -18,6 +18,7 @@ import {
   X,
   Zap,
   RefreshCw,
+  LogOut,
 } from 'lucide-react'
 
 type Platform = 'commerce' | 'social' | 'youtube'
@@ -58,7 +59,7 @@ const SLOGANS: Record<Tone, Record<Platform, string>> = {
   ms: { commerce: 'JUALAN MEGA · HARI INI', social: 'Wajib Ada Setiap Hari', youtube: 'KORANG TAK PERCAYA!' },
 }
 
-const MAX_CREDITS = 3
+const MAX_CREDITS = 5
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 
 function buildCopy(platform: Platform, tone: Tone, brief: string): string {
@@ -343,7 +344,6 @@ export default function Page() {
   const briefId = useId()
   const cardFieldId = useId()
 
-  const isLocked = isAuthed && credits <= 0
   const visibleOverlays = OVERLAYS.filter((o) => o.platforms.includes(platform))
   const isOverlayActive = (key: OverlayKey) =>
     overlays[key] && OVERLAYS.some((o) => o.id === key && o.platforms.includes(platform))
@@ -400,6 +400,25 @@ export default function Page() {
     setAuthOpen(false)
   }
 
+  const handleLogout = () => {
+    if (generateTimerRef.current) clearTimeout(generateTimerRef.current)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setIsAuthed(false)
+    setCredits(0)
+    setProvider('google')
+    setAuthOpen(false)
+    setPaywallOpen(false)
+    setImageSrc(null)
+    setImageName('')
+    setUploadError('')
+    setIsDragging(false)
+    setOutput('')
+    setBrief('')
+    setIsGenerating(false)
+    setCopied(false)
+    setToast('')
+  }
+
   const showToast = (message: string) => {
     setToast(message)
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -416,7 +435,7 @@ export default function Page() {
     setCardCvc('')
     setPaypalEmail('')
     showToast(
-      'Success! Your payment intent has been captured. Pro tier is being provisioned under your Google/Apple profile.',
+      'Success! Starter Plan activated - 999 credits unlocked. / 升级成功！基础创业套餐已激活。',
     )
   }
 
@@ -451,7 +470,7 @@ export default function Page() {
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    if (isAuthed && !isLocked) setIsDragging(true)
+    if (isAuthed && credits > 0) setIsDragging(true)
   }
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -511,19 +530,28 @@ export default function Page() {
 
           {isAuthed ? (
             <div
-              className="flex min-w-0 items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 py-1 pl-1 pr-3 text-xs font-medium text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.25)] sm:pr-4 sm:text-sm"
-              aria-live="polite"
+              className="flex min-w-0 items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 py-1 pl-1 pr-1 text-xs font-medium text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.25)] sm:text-sm"
             >
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-slate-950 text-slate-100 ring-1 ring-amber-400/50">
                 {provider === 'google' ? <GoogleIcon /> : <AppleIcon />}
               </span>
-              <span className="min-w-0 truncate">
-                <span className="hidden sm:inline">Boss: {PROFILE_EMAIL[provider]} </span>
-                <span className="sm:hidden">Boss </span>
+              <span className="min-w-0 truncate" aria-live="polite">
+                <span className="hidden md:inline">Boss: {PROFILE_EMAIL[provider]} </span>
+                <span className="md:hidden">Boss </span>
                 <span className={credits <= 0 ? 'text-red-300' : undefined}>
                   ({credits} {credits === 1 ? 'Credit' : 'Credits'} Left)
                 </span>
               </span>
+              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-amber-400/40" />
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/50 bg-slate-950 px-2.5 py-1 text-xs font-semibold text-amber-300 transition hover:border-amber-300 hover:bg-amber-400 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+              >
+                <LogOut className="size-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Logout</span>
+                <span className="sr-only sm:hidden">Logout</span>
+              </button>
             </div>
           ) : (
             <button
@@ -747,31 +775,7 @@ export default function Page() {
             Live Preview Dashboard
           </h2>
           <div className="relative">
-          {isLocked && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-slate-950/70 p-4 backdrop-blur-[3px]">
-              <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl border border-amber-400/40 bg-slate-950/90 px-6 py-5 text-center shadow-[0_0_40px_rgba(251,191,36,0.2)]">
-                <span className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 to-yellow-600 text-slate-950">
-                  <Lock className="size-5" aria-hidden="true" />
-                </span>
-                <p className="text-sm font-semibold text-slate-100">Preview frozen — free credits used</p>
-                <p className="text-xs leading-relaxed text-slate-400">
-                  Upgrade to Starter Pro to unlock unlimited generations and keep editing.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setPaywallOpen(true)}
-                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:shadow-[0_0_24px_rgba(251,191,36,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-                >
-                  View Pro Plan
-                </button>
-              </div>
-            </div>
-          )}
-          <div
-            className={`grid w-full grid-cols-1 gap-6 transition md:grid-cols-2 ${isLocked ? 'pointer-events-none select-none opacity-60 grayscale-[40%]' : ''}`}
-            aria-hidden={isLocked || undefined}
-            inert={isLocked || undefined}
-          >
+          <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
               <header className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-slate-200">AI Visual Preview</h3>
@@ -978,16 +982,20 @@ export default function Page() {
                   Free Tier Limit Reached!
                 </h2>
                 <p id="paywall-desc" className="mt-2 text-sm leading-relaxed text-slate-400">
-                  {"You've used all 3 free trial credits. Go Pro to keep generating without limits."}
+                  {"You've used all 5 free trial credits. Upgrade to keep generating."}
                 </p>
 
                 <div className="mt-6 rounded-2xl border border-amber-400/40 bg-slate-950/80 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.2)]">
-                  <div className="flex items-center gap-2">
-                    <Crown className="size-4 text-amber-400" aria-hidden="true" />
-                    <span className="text-sm font-semibold text-amber-200">Starter Pro Plan</span>
-                    <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
-                      Most popular
-                    </span>
+                  <div className="flex items-start gap-2">
+                    <Crown className="mt-0.5 size-4 shrink-0 text-amber-400" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-snug text-amber-200">
+                        Starter Plan - 150 High-Converting AI Graphics / Month
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
+                        基础创业套餐 - 每月 150 张高转化率商业级 AI 视觉资产
+                      </p>
+                    </div>
                   </div>
                   <p className="mt-3 flex items-baseline gap-1.5">
                     <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-yellow-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent">
@@ -1006,6 +1014,21 @@ export default function Page() {
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                <div
+                  role="note"
+                  className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/5 p-4 text-xs leading-relaxed"
+                >
+                  <p className="font-semibold text-amber-300">
+                    <span aria-hidden="true">🔒 </span>[Session Control Active] 1 Active Device Session Limit
+                  </p>
+                  <p className="mt-1 text-slate-400">
+                    Each account may only be signed in on one device at a time. Account sharing is blocked; a new sign-in automatically ends the previous session.
+                  </p>
+                  <p className="mt-1.5 text-slate-400">
+                    严格锁定单个账号同时只能有 1 台设备在线。严禁多设备共享蹭号，新登录将自动踢出旧会话。
+                  </p>
                 </div>
               </div>
 
@@ -1136,7 +1159,7 @@ export default function Page() {
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_0_28px_rgba(251,191,36,0.4)] transition hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(251,191,36,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   <Crown className="size-4" aria-hidden="true" />
-                  Confirm &amp; Subscribe Now
+                  Confirm &amp; Subscribe Now / 立即尊享升级
                 </button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500">
                   <Lock className="size-3" aria-hidden="true" />
