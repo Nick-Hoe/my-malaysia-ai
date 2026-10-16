@@ -14,22 +14,24 @@ export default function Home() {
   const [generatedText, setGeneratedText] = useState("");
   const [selectedImage, setSelectedImage] = useState("");
 
-  // 商用登录、注册与额度状态控制
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthModalMode] = useState("login"); 
   const [userContact, setUserContact] = useState("");
   const [credits, setCredits] = useState(0);
 
+  // 完美修正第29行的标点符号错位问题，确保 FileReader 流绝对畅通
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isLoggedIn) {
       setShowAuthModal(true);
       return;
     }
-    const file = e.target.files?.;
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setSelectedImage(reader.result as string);
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -42,7 +44,6 @@ export default function Home() {
     setShowAuthModal(false);
   };
 
-  // 完美修复：深度打通 Target Platform 与 Content Tone 的多语言自适应文案池逻辑
   const handleGenerate = () => {
     if (!isLoggedIn) {
       setShowAuthModal(true);
@@ -78,8 +79,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative">
-      
-      {/* Top Navbar Area */}
       <div className="absolute top-4 right-4 sm:right-8 z-10 flex items-center space-x-3">
         {isLoggedIn ? (
           <div className="flex items-center space-x-2 bg-zinc-900/80 border border-zinc-800 px-4 py-2 rounded-xl text-xs font-semibold">
@@ -88,15 +87,13 @@ export default function Home() {
             <span className="text-orange-400 font-bold">({credits} Credits Left)</span>
           </div>
         ) : (
-          <button type="button" onClick={() => { setAuthModalMode("login"); setShowAuthModal(true); }} className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md">
-            Sign In / Register
-          </button>
+          <button type="button" onClick={() => { setAuthModalMode("login"); setShowAuthModal(true); }} className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md">Sign In / Register</button>
         )}
       </div>
 
       <div className="max-w-4xl w-full bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 sm:p-8 shadow-2xl backdrop-blur-md mt-12">
         <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-orange-400 via-amber-200 to-orange-500 bg-clip-text text-transparent">AI create (Beta)</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-orange-400 via-amber-200 to-orange-500 bg-clip-text text-transparent">🇲🇾 AI create (Beta)</h1>
           <p className="text-xs sm:text-sm text-zinc-400 mt-2">Instant premium visuals and conversion copies for Malaysian Sellers & Creators.</p>
         </div>
 
@@ -132,14 +129,14 @@ export default function Home() {
                 <label htmlFor="file-uploader" className="block border-2 border-dashed border-zinc-700 hover:border-orange-500 rounded-xl p-6 sm:p-8 text-center bg-zinc-950/40 transition-colors cursor-pointer active:scale-[0.99]">
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <svg className="w-8 h-8 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                    <span className="text-xs sm:text-sm text-zinc-300 font-medium block">
-                      {selectedImage ? "✓ Photo loaded successfully! Click to change" : "Drag files here to add them to your website or click to browse"}
-                    </span>
+                    <span className="text-xs sm:text-sm text-zinc-300 font-medium block">{selectedImage ? "✓ Photo loaded successfully! Click to change" : "Drag files here to add them to your website or click to browse"}</span>
                   </div>
                 </label>
                 <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-800 flex flex-wrap gap-2.5">
                   <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={burnSlogan} onChange={(e) => setBurnSlogan(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" /><span className="text-xs text-zinc-300 font-medium">Big Slogan Banner</span></label>
-                  {platform !== "youtube" && (<input type="checkbox" checked={stickerReady} onChange={(e) => setStickerReady(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🇲🇾 Ready Stock<input type="checkbox" checked={stickerFast} onChange={(e) => setStickerFast(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🚚 24H Fast Ship</>
+                  {platform !== "youtube" && (
+Use code with caution.
+<><input type="checkbox" checked={stickerReady} onChange={(e) => setStickerReady(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🇲🇾 Ready Stock<input type="checkbox" checked={stickerFast} onChange={(e) => setStickerFast(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />🚚 24H Fast Ship</>
 )}
 {platform === "youtube" && (<input type="checkbox" checked={stickerShock} onChange={(e) => setStickerShock(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500" />😱 Shock Face)}
 
@@ -164,7 +161,6 @@ AI Visual Preview
 
 
 )}
-{/* 核心商用模块：高逼格黑金暗夜 Auth 弹窗墙 */}
 {showAuthModal && (
 
 
