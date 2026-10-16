@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import {
   Check,
   Copy,
+  CreditCard,
   Crown,
+  ShieldCheck,
   ImagePlus,
   Loader2,
   Lock,
@@ -241,12 +243,63 @@ function buildCopy(platform: Platform, tone: Tone, brief: string): string {
   ].join('\n')
 }
 
-function isValidContact(value: string): boolean {
-  const trimmed = value.trim()
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-  const phoneDigits = trimmed.replace(/[\s\-()+]/g, '')
-  const phonePattern = /^\d{7,15}$/
-  return emailPattern.test(trimmed) || phonePattern.test(phoneDigits)
+type AuthProvider = 'google' | 'apple'
+type PayMethod = 'card' | 'paypal'
+
+const PRO_CREDITS = 999
+
+const PROFILE_EMAIL: Record<AuthProvider, string> = {
+  google: 'client@google.com',
+  apple: 'client@icloud.com',
+}
+
+const PRO_FEATURES = [
+  'Unlimited High-Fidelity Image Generation',
+  'Advanced Worldwide Marketing Badge Layers',
+  'Ultra-Fast DeepSeek Content Engine',
+]
+
+function formatCardNumber(value: string): string {
+  return value
+    .replace(/\D/g, '')
+    .slice(0, 16)
+    .replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+function formatExpiry(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4)
+  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 48 48" className="size-5" aria-hidden="true">
+      <path
+        fill="#FFC107"
+        d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+      />
+      <path
+        fill="#FF3D00"
+        d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+      />
+      <path
+        fill="#4CAF50"
+        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0124 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+      />
+      <path
+        fill="#1976D2"
+        d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
+      />
+    </svg>
+  )
+}
+
+function AppleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden="true">
+      <path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z" />
+    </svg>
+  )
 }
 
 export default function Page() {
@@ -254,9 +307,14 @@ export default function Page() {
   const [credits, setCredits] = useState(0)
   const [authOpen, setAuthOpen] = useState(false)
   const [paywallOpen, setPaywallOpen] = useState(false)
-  const [upgradeRequested, setUpgradeRequested] = useState(false)
-  const [contact, setContact] = useState('')
-  const [contactError, setContactError] = useState('')
+  const [provider, setProvider] = useState<AuthProvider>('google')
+  const [payMethod, setPayMethod] = useState<PayMethod>('card')
+  const [cardName, setCardName] = useState('')
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvc, setCardCvc] = useState('')
+  const [paypalEmail, setPaypalEmail] = useState('')
+  const [toast, setToast] = useState('')
 
   const [platform, setPlatform] = useState<Platform>('commerce')
   const [tone, setTone] = useState<Tone>('en')
@@ -277,12 +335,13 @@ export default function Page() {
   const [copied, setCopied] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const contactInputRef = useRef<HTMLInputElement>(null)
+  const googleButtonRef = useRef<HTMLButtonElement>(null)
   const generateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const toneId = useId()
   const briefId = useId()
-  const contactId = useId()
+  const cardFieldId = useId()
 
   const isLocked = isAuthed && credits <= 0
   const visibleOverlays = OVERLAYS.filter((o) => o.platforms.includes(platform))
@@ -298,12 +357,24 @@ export default function Page() {
   }, [authOpen, paywallOpen])
 
   useEffect(() => {
-    if (authOpen) contactInputRef.current?.focus()
+    if (authOpen) googleButtonRef.current?.focus()
   }, [authOpen])
+
+  useEffect(() => {
+    if (!authOpen && !paywallOpen) return
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setAuthOpen(false)
+      setPaywallOpen(false)
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [authOpen, paywallOpen])
 
   useEffect(() => {
     return () => {
       if (generateTimerRef.current) clearTimeout(generateTimerRef.current)
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   }, [])
 
@@ -322,22 +393,31 @@ export default function Page() {
     [isAuthed, credits],
   )
 
-  const handleAuthSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!isValidContact(contact)) {
-      setContactError('Please enter a valid email address or mobile number.')
-      return
-    }
-    setContactError('')
+  const handleOAuth = (selected: AuthProvider) => {
+    setProvider(selected)
     setIsAuthed(true)
     setCredits(MAX_CREDITS)
     setAuthOpen(false)
   }
 
-  const handleContactKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) {
-      event.preventDefault()
-    }
+  const showToast = (message: string) => {
+    setToast(message)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(''), 6000)
+  }
+
+  const handleSubscribe = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPaywallOpen(false)
+    setCredits(PRO_CREDITS)
+    setCardName('')
+    setCardNumber('')
+    setCardExpiry('')
+    setCardCvc('')
+    setPaypalEmail('')
+    showToast(
+      'Success! Your payment intent has been captured. Pro tier is being provisioned under your Google/Apple profile.',
+    )
   }
 
   const readImageFile = (file: File | undefined) => {
@@ -393,11 +473,7 @@ export default function Page() {
       generateTimerRef.current = setTimeout(() => {
         setOutput(buildCopy(platform, tone, brief))
         setIsGenerating(false)
-        setCredits((prev) => {
-          const next = Math.max(prev - 1, 0)
-          if (next === 0) setPaywallOpen(true)
-          return next
-        })
+        setCredits((prev) => Math.max(prev - 1, 0))
       }, 1800)
     })
 
@@ -435,14 +511,18 @@ export default function Page() {
 
           {isAuthed ? (
             <div
-              className="flex shrink-0 items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.25)] sm:px-4 sm:text-sm"
+              className="flex min-w-0 items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 py-1 pl-1 pr-3 text-xs font-medium text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.25)] sm:pr-4 sm:text-sm"
               aria-live="polite"
             >
-              <span className="flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-600 text-[11px] font-bold text-slate-950">
-                B
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-slate-950 text-slate-100 ring-1 ring-amber-400/50">
+                {provider === 'google' ? <GoogleIcon /> : <AppleIcon />}
               </span>
-              <span>
-                Hi, Boss! ({credits} {credits === 1 ? 'Credit' : 'Credits'} Left)
+              <span className="min-w-0 truncate">
+                <span className="hidden sm:inline">Boss: {PROFILE_EMAIL[provider]} </span>
+                <span className="sm:hidden">Boss </span>
+                <span className={credits <= 0 ? 'text-red-300' : undefined}>
+                  ({credits} {credits === 1 ? 'Credit' : 'Credits'} Left)
+                </span>
               </span>
             </div>
           ) : (
@@ -666,7 +746,32 @@ export default function Page() {
           <h2 id="preview-heading" className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-amber-300">
             Live Preview Dashboard
           </h2>
-          <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="relative">
+          {isLocked && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-slate-950/70 p-4 backdrop-blur-[3px]">
+              <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl border border-amber-400/40 bg-slate-950/90 px-6 py-5 text-center shadow-[0_0_40px_rgba(251,191,36,0.2)]">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 to-yellow-600 text-slate-950">
+                  <Lock className="size-5" aria-hidden="true" />
+                </span>
+                <p className="text-sm font-semibold text-slate-100">Preview frozen — free credits used</p>
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Upgrade to Starter Pro to unlock unlimited generations and keep editing.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPaywallOpen(true)}
+                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:shadow-[0_0_24px_rgba(251,191,36,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                >
+                  View Pro Plan
+                </button>
+              </div>
+            </div>
+          )}
+          <div
+            className={`grid w-full grid-cols-1 gap-6 transition md:grid-cols-2 ${isLocked ? 'pointer-events-none select-none opacity-60 grayscale-[40%]' : ''}`}
+            aria-hidden={isLocked || undefined}
+            inert={isLocked || undefined}
+          >
             <article className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
               <header className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-slate-200">AI Visual Preview</h3>
@@ -773,6 +878,7 @@ export default function Page() {
               </div>
             </article>
           </div>
+          </div>
         </section>
       </main>
 
@@ -782,18 +888,16 @@ export default function Page() {
 
       {authOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm animate-in fade-in sm:items-center sm:p-4"
           onClick={() => setAuthOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setAuthOpen(false)
-          }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="auth-title"
+            aria-describedby="auth-desc"
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-2xl border border-amber-400/30 bg-slate-950 p-6 shadow-[0_0_60px_rgba(251,191,36,0.15)] animate-in zoom-in-95 sm:p-8"
+            className="relative w-full max-w-md rounded-t-3xl border border-amber-400/30 bg-slate-950 px-6 pb-8 pt-7 shadow-[0_0_60px_rgba(251,191,36,0.15)] animate-in slide-in-from-bottom-4 sm:rounded-3xl sm:p-10 sm:zoom-in-95"
           >
             <button
               type="button"
@@ -803,96 +907,265 @@ export default function Page() {
             >
               <X className="size-5" />
             </button>
-            <span className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 to-yellow-600 text-slate-950">
-              <Lock className="size-5" aria-hidden="true" />
-            </span>
-            <h2 id="auth-title" className="mt-5 text-2xl font-semibold tracking-tight">
-              Unlock AI create
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Register with your email or mobile number to get{' '}
-              <span className="font-semibold text-amber-300">3 free generation credits</span>.
-            </p>
-            <form onSubmit={handleAuthSubmit} noValidate className="mt-6 space-y-4">
-              <div>
-                <label htmlFor={contactId} className="mb-2 block text-sm font-medium text-slate-300">
-                  Email or Mobile Phone
-                </label>
-                <input
-                  ref={contactInputRef}
-                  id={contactId}
-                  type="text"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={contact}
-                  onChange={(e) => {
-                    setContact(e.target.value)
-                    if (contactError) setContactError('')
-                  }}
-                  onKeyDown={handleContactKeyDown}
-                  placeholder="you@brand.com or +60 12 345 6789"
-                  aria-invalid={Boolean(contactError)}
-                  aria-describedby={contactError ? `${contactId}-error` : undefined}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 transition focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-                />
-                {contactError && (
-                  <p id={`${contactId}-error`} role="alert" className="mt-2 text-sm text-red-400">
-                    {contactError}
-                  </p>
-                )}
-              </div>
+            <div className="flex flex-col items-center text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-600 text-slate-950 shadow-[0_0_28px_rgba(251,191,36,0.4)]">
+                <Sparkles className="size-6" aria-hidden="true" />
+              </span>
+              <h2 id="auth-title" className="mt-6 text-balance text-2xl font-semibold tracking-tight text-white sm:text-[28px]">
+                Sign in to AI create
+              </h2>
+              <p id="auth-desc" className="mt-2 text-pretty text-sm leading-relaxed text-slate-400">
+                Get started with <span className="font-semibold text-amber-300">3 free trial credits</span> instantly
+              </p>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3">
               <button
-                type="submit"
-                className="w-full rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition hover:shadow-[0_0_36px_rgba(251,191,36,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                ref={googleButtonRef}
+                type="button"
+                onClick={() => handleOAuth('google')}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 hover:shadow-[0_0_24px_rgba(255,255,255,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
-                Get Free Trial
+                <GoogleIcon />
+                Continue with Google
               </button>
-              <p className="text-center text-xs text-slate-500">No credit card required.</p>
-            </form>
+              <button
+                type="button"
+                onClick={() => handleOAuth('apple')}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-700 bg-black px-4 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                <AppleIcon />
+                Continue with Apple
+              </button>
+            </div>
+
+            <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
+              <ShieldCheck className="size-3.5 text-amber-400/80" aria-hidden="true" />
+              No credit card required · Secured single sign-on
+            </p>
           </div>
         </div>
       )}
 
       {paywallOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/85 p-0 backdrop-blur-md animate-in fade-in sm:items-center sm:p-4"
+          onClick={() => setPaywallOpen(false)}
+        >
           <div
-            role="alertdialog"
+            role="dialog"
             aria-modal="true"
             aria-labelledby="paywall-title"
             aria-describedby="paywall-desc"
-            className="w-full max-w-md rounded-2xl border border-amber-400/40 bg-slate-950 p-6 text-center shadow-[0_0_80px_rgba(251,191,36,0.2)] animate-in zoom-in-95 sm:p-8"
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-t-3xl border border-amber-400/40 bg-[#0b0b0f] shadow-[0_0_80px_rgba(251,191,36,0.2)] animate-in slide-in-from-bottom-4 sm:rounded-3xl sm:zoom-in-95"
           >
-            <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-yellow-600 text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.45)]">
-              <Crown className="size-7" aria-hidden="true" />
-            </span>
-            <h2 id="paywall-title" className="mt-5 text-2xl font-semibold tracking-tight">
-              {"You're out of credits, Boss"}
-            </h2>
-            <p id="paywall-desc" className="mt-2 text-sm leading-relaxed text-slate-400">
-              {"You've used all 3 free generations. Upgrade to the Pro plan for unlimited premium visuals, every language, and priority rendering."}
-            </p>
-            <ul className="mt-6 space-y-2 text-left text-sm text-slate-300">
-              {['Unlimited AI generations', 'All platforms & overlay packs', 'HD export without watermark'].map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <Check className="size-4 shrink-0 text-amber-400" aria-hidden="true" />
-                  {item}
-                </li>
-              ))}
-            </ul>
             <button
               type="button"
-              onClick={() => setUpgradeRequested(true)}
-              autoFocus
-              className="mt-7 w-full rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition hover:shadow-[0_0_36px_rgba(251,191,36,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              onClick={() => setPaywallOpen(false)}
+              className="absolute right-4 top-4 z-10 rounded-md p-1 text-slate-500 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+              aria-label="Close"
             >
-              Upgrade to Pro
+              <X className="size-5" />
             </button>
-            {upgradeRequested && (
-              <p role="status" className="mt-3 text-xs text-amber-200">
-                {"Thanks, Boss! You're on the Pro early-access list — we'll reach out shortly."}
-              </p>
-            )}
+
+            <div className="grid md:grid-cols-2">
+              <div className="border-b border-amber-400/15 bg-[radial-gradient(ellipse_at_top_left,rgba(251,191,36,0.16),transparent_70%)] p-6 sm:p-8 md:border-b-0 md:border-r">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+                  <span aria-hidden="true">⚠️ </span>Upgrade required
+                </p>
+                <h2 id="paywall-title" className="mt-3 text-balance text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                  Free Tier Limit Reached!
+                </h2>
+                <p id="paywall-desc" className="mt-2 text-sm leading-relaxed text-slate-400">
+                  {"You've used all 3 free trial credits. Go Pro to keep generating without limits."}
+                </p>
+
+                <div className="mt-6 rounded-2xl border border-amber-400/40 bg-slate-950/80 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.2)]">
+                  <div className="flex items-center gap-2">
+                    <Crown className="size-4 text-amber-400" aria-hidden="true" />
+                    <span className="text-sm font-semibold text-amber-200">Starter Pro Plan</span>
+                    <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+                      Most popular
+                    </span>
+                  </div>
+                  <p className="mt-3 flex items-baseline gap-1.5">
+                    <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-yellow-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent">
+                      $9.90
+                    </span>
+                    <span className="text-sm text-slate-400">USD / Month</span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">or RM 39/mo · cancel anytime</p>
+                  <ul className="mt-5 space-y-2.5 text-sm text-slate-200">
+                    {PRO_FEATURES.map((item) => (
+                      <li key={item} className="flex items-start gap-2.5">
+                        <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-slate-950">
+                          <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubscribe} className="flex flex-col p-6 sm:p-8" autoComplete="off">
+                <h3 className="text-sm font-semibold text-slate-200">Payment method</h3>
+                <div role="tablist" aria-label="Payment method" className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
+                  {(
+                    [
+                      { id: 'card', label: 'Credit Card' },
+                      { id: 'paypal', label: 'PayPal / International Card Payment' },
+                    ] as const
+                  ).map((m) => {
+                    const active = payMethod === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        aria-controls={`${cardFieldId}-${m.id}`}
+                        onClick={() => setPayMethod(m.id)}
+                        className={`rounded-lg px-2 py-2 text-xs font-medium leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
+                          active ? 'bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/50' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {payMethod === 'card' ? (
+                  <div id={`${cardFieldId}-card`} role="tabpanel" className="mt-5 space-y-3">
+                    <div>
+                      <label htmlFor={`${cardFieldId}-name`} className="mb-1.5 block text-xs font-medium text-slate-400">
+                        Name on card
+                      </label>
+                      <input
+                        id={`${cardFieldId}-name`}
+                        type="text"
+                        value={cardName}
+                        onChange={(e) => setCardName(e.target.value)}
+                        placeholder="Boss Client"
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`${cardFieldId}-number`} className="mb-1.5 block text-xs font-medium text-slate-400">
+                        Card number
+                      </label>
+                      <div className="relative">
+                        <CreditCard className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                        <input
+                          id={`${cardFieldId}-number`}
+                          type="text"
+                          inputMode="numeric"
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                          placeholder="4242 4242 4242 4242"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900 py-2.5 pl-9 pr-3 font-mono text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor={`${cardFieldId}-exp`} className="mb-1.5 block text-xs font-medium text-slate-400">
+                          Expiry
+                        </label>
+                        <input
+                          id={`${cardFieldId}-exp`}
+                          type="text"
+                          inputMode="numeric"
+                          value={cardExpiry}
+                          onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                          placeholder="MM/YY"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 font-mono text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`${cardFieldId}-cvc`} className="mb-1.5 block text-xs font-medium text-slate-400">
+                          CVC
+                        </label>
+                        <input
+                          id={`${cardFieldId}-cvc`}
+                          type="text"
+                          inputMode="numeric"
+                          value={cardCvc}
+                          onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="123"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 font-mono text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div id={`${cardFieldId}-paypal`} role="tabpanel" className="mt-5 space-y-3">
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                      <span className="flex h-8 shrink-0 items-center rounded-md bg-[#ffc439] px-2.5 text-sm font-extrabold italic tracking-tight text-[#003087]">
+                        Pay<span className="text-[#009cde]">Pal</span>
+                      </span>
+                      <p className="text-xs leading-relaxed text-slate-400">
+                        Pay with your PayPal balance or any international Visa, Mastercard or Amex card.
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor={`${cardFieldId}-paypal-email`} className="mb-1.5 block text-xs font-medium text-slate-400">
+                        PayPal email
+                      </label>
+                      <input
+                        id={`${cardFieldId}-paypal-email`}
+                        type="email"
+                        value={paypalEmail}
+                        onChange={(e) => setPaypalEmail(e.target.value)}
+                        placeholder={PROFILE_EMAIL[provider]}
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4 text-sm">
+                  <span className="text-slate-400">Due today</span>
+                  <span className="font-semibold text-white">$9.90 USD</span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 px-4 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_0_28px_rgba(251,191,36,0.4)] transition hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(251,191,36,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                >
+                  <Crown className="size-4" aria-hidden="true" />
+                  Confirm &amp; Subscribe Now
+                </button>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500">
+                  <Lock className="size-3" aria-hidden="true" />
+                  Demo checkout · no real charge is made
+                </p>
+              </form>
+            </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-amber-400/50 bg-slate-950/95 p-4 shadow-[0_0_40px_rgba(251,191,36,0.3)] backdrop-blur animate-in slide-in-from-bottom-4 fade-in sm:bottom-6"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-600 text-slate-950">
+            <Check className="size-4" strokeWidth={3} aria-hidden="true" />
+          </span>
+          <p className="flex-1 text-sm leading-relaxed text-slate-200">{toast}</p>
+          <button
+            type="button"
+            onClick={() => setToast('')}
+            className="rounded-md p-0.5 text-slate-500 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            aria-label="Dismiss notification"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       )}
     </div>
